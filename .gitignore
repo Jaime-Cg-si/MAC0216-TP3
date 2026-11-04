@@ -50,7 +50,6 @@ $RECYCLE.BIN/
 .history/
 
 # ------------------------------------------------------------
-# Mock Files
+# Arquivos de rascunho
 # ------------------------------------------------------------
-fecha_arquivo.asm
-soma.asm
+rascunhos/
