@@ -48,3 +48,9 @@ $RECYCLE.BIN/
 !.vscode/extensions.json
 *.code-workspace
 .history/
+
+# ------------------------------------------------------------
+# Mock Files
+# ------------------------------------------------------------
+fecha_arquivo.asm
+soma.asm
