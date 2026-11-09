@@ -41,22 +41,38 @@ _start:
     add rsp, 16                             ;coloca pilha livre
 
     ; TODO: loop de leitura byte a byte
-    ; TODO: determinar se a sequência UTF-8 possui 1, 2, 3 ou 4 bytes
-    ; TODO: combinar bits para reconstruir o code point
-    ; TODO: chamar gera_string_hexadecimal e grava_string_arquivo
+    .laco_leitura:
 
-    ; fechar os arquivos e encerrar com sys_exit
+        push qword byte_arq                     ;carregando byte a ser lido (atualizado pela própria sys_read)
+        push qword [descr_entrada]              ;carregando o descritor do arquivo a ser lido
+        call le_byte_arquivo                    ;chamada função
+        add rsp, 16                             ;coloca pilha livre
+
+        ;entrando no loop. Enquanto o byte lido for 1
+        cmp rax, 0                              ;compara o retorno da leitura com 0 (fim do arquivo)
+        jle .fim_arquivo                        ;arquivo de leitura acabou (ou deu erro na leitura)
+        movzx rbx, byte [byte_arq]                   ;salva o byte lido em rbx, zerando as demais posições
     
-    ;fecha o arquivo de entrada
-    push qword [descr_entrada]
-    call fecha_arquivo                      ;chamada da função
-    add rsp, 8                              ;coloca pilha livre 
 
-    ;fecha o arquivo de saída
-    push qword [descr_saida]
-    call fecha_arquivo
-    add rsp, 8
-    jmp fim_programa                        ;encerra programa
+
+        ; TODO: determinar se a sequência UTF-8 possui 1, 2, 3 ou 4 bytes
+        ; TODO: combinar bits para reconstruir o code point
+        ; TODO: chamar gera_string_hexadecimal e grava_string_arquivo
+
+        jmp .laco_leitura
+
+    .fim_arquivo:
+        ; fechar os arquivos e encerrar com sys_exit
+        ;fecha o arquivo de entrada
+        push qword [descr_entrada]
+        call fecha_arquivo                      ;chamada da função
+        add rsp, 8                              ;coloca pilha livre 
+
+        ;fecha o arquivo de saída
+        push qword [descr_saida]
+        call fecha_arquivo
+        add rsp, 8
+        jmp fim_programa                        ;encerra programa
     
 
 fim_programa:
@@ -101,7 +117,26 @@ abre_arquivo:
     pop rdx                                ;restaura rdx
     pop rsi                                ;restaura rsi
     pop rdi                                ;restaura rdi
-    pop rbp                               ;restaura rbp
+    pop rbp                                ;restaura rbp
     ret
 
 
+le_byte_arquivo:
+    push rbp                               ;rbp antigo
+    mov rbp, rsp                           ;setta novo rbp
+    push rdi                               ;rdi antigo
+    push rsi                               ;rsi antigo
+    push rdx                               ;rdx antigo
+; -------------------------------------------
+; Syscall: sys_read
+    mov rax, 0                            ;sys_read
+    mov rdi, [rbp+16]                      ;carrega descritor em rdi
+    mov rsi, [rbp+24]                      ;carrega byte_arq em rsi
+    mov rdx, 1                             ;lê 1 byte
+    syscall
+; -------------------------------------------
+    pop rdx                                ;restaura rdx
+    pop rsi                                ;restaura rsi
+    pop rdi                                ;restaura rdi
+    pop rbp                                ;restaura rbp
+    ret                                    ;retorno
