@@ -4,8 +4,10 @@
 global _start
 
 section .data
-    msg_entrada db "Digite o nome do arquivo de entrada: ", 0
-    msg_saida   db "Digite o nome do arquivo de saída: ", 0
+    msg_entrada db "Digite o nome do arquivo de entrada: ",0x00A, 0
+    tam_msg_entrada equ $ - msg_entrada
+    msg_saida   db "Digite o nome do arquivo de saída: ", 0x00A, 0
+    tam_msg_saida equ $ - msg_saida
 
 
 section .bss
@@ -21,7 +23,19 @@ section .text
 
 
 _start:
-    ; TODO: solicitar e ler nome do arquivo de entrada
+    ;solicitar e ler nome do arquivo de entrada
+
+    ;exibindo mensagem de entrada
+    push qword tam_msg_entrada
+    push qword msg_entrada                  ;empilha mensagem de entrada
+    call imprime_tela                       ;chamada função imprime_tela(int tamanho_mensagem, char* mensagem)
+    add rsp, 8                              ;coloca pilha livre
+
+    ;recebendo arquivo de entrada
+    push qword nome_entrada                 ;empilha onde deve ser salvo o nome do arquivo
+    call recebe_arquivo                     ;chamada da função recebe_arquivo(char* nome_entrada)
+    add rsp, 8                              ;coloca pilha livre
+
     ; TODO: solicitar e ler nome do arquivo de saída
 
     ; abrir arquivos usando abre_arquivo
@@ -52,8 +66,6 @@ _start:
         cmp rax, 0                              ;compara o retorno da leitura com 0 (fim do arquivo)
         jle .fim_arquivo                        ;arquivo de leitura acabou (ou deu erro na leitura)
         movzx rbx, byte [byte_arq]                   ;salva o byte lido em rbx, zerando as demais posições
-    
-
 
         ; TODO: determinar se a sequência UTF-8 possui 1, 2, 3 ou 4 bytes
         ; TODO: combinar bits para reconstruir o code point
@@ -74,7 +86,7 @@ _start:
         add rsp, 8
         jmp fim_programa                        ;encerra programa
     
-
+;;
 fim_programa:
 ; -------------------------------------------
 ; Syscall: sys_exit
@@ -82,7 +94,8 @@ fim_programa:
     mov rdi, 0                              ;sucesso
     syscall
 ; -------------------------------------------
-
+;
+;
 fecha_arquivo:
     push rbp                                ;empilha rbp anterior
     mov rbp, rsp                            ;setta o novo rbp
@@ -96,8 +109,8 @@ fecha_arquivo:
     pop rdi                                 ;restaurar rdi
     pop rbp                                 ;restaurar rbp
     ret
-
-
+;
+;
 abre_arquivo:
 
     push rbp                               ;salva rbp antigo
@@ -119,8 +132,8 @@ abre_arquivo:
     pop rdi                                ;restaura rdi
     pop rbp                                ;restaura rbp
     ret
-
-
+;
+;
 le_byte_arquivo:
     push rbp                               ;rbp antigo
     mov rbp, rsp                           ;setta novo rbp
@@ -133,6 +146,48 @@ le_byte_arquivo:
     mov rdi, [rbp+16]                      ;carrega descritor em rdi
     mov rsi, [rbp+24]                      ;carrega byte_arq em rsi
     mov rdx, 1                             ;lê 1 byte
+    syscall
+; -------------------------------------------
+    pop rdx                                ;restaura rdx
+    pop rsi                                ;restaura rsi
+    pop rdi                                ;restaura rdi
+    pop rbp                                ;restaura rbp
+    ret                                    ;retorno
+;
+;
+imprime_tela:
+    push rbp                               ;rbp antigo
+    mov rbp, rsp                           ;setta novo rbp
+    push rdi                               ;rdi antigo
+    push rsi                               ;rsi antigo
+    push rdx                               ;rdx antigo
+; -------------------------------------------
+; Syscall: sys_write
+    mov rax, 1                             ;sys_write
+    mov rdi, 1                             ;stdout
+    mov rsi, [rbp+16]                      ;msg_entrada
+    mov rdx, [rbp+24]                      ;tam_msg_entrada
+    syscall
+; -------------------------------------------
+    pop rdx                                ;restaura rdx
+    pop rsi                                ;restaura rsi
+    pop rdi                                ;restaura rdi
+    pop rbp                                ;restaura rbp
+    ret                                    ;retorno
+;
+;
+recebe_arquivo:
+    push rbp                               ;rbp antigo
+    mov rbp, rsp                           ;setta novo rbp
+    push rdi                               ;rdi antigo
+    push rsi                               ;rsi antigo
+    push rdx                               ;rdx antigo
+; -------------------------------------------
+; Syscall: sys_read
+    mov rax, 0                             ;sys_read
+    mov rdi, 0                             ;stdin
+    mov rsi, [rbp+16]                      ;nome_entrada
+    mov rdx, 256                           ;max bytes lidos
     syscall
 ; -------------------------------------------
     pop rdx                                ;restaura rdx
