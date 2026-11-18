@@ -25,15 +25,20 @@ _start:
 
     ;exibindo mensagem de entrada
     push qword msg_entrada                  ;empilha mensagem de entrada
-    call escreve_string                       ;chamada função escreve_string(char* mensagem)
+    call escreve_string                     ;chamada função escreve_string(char* mensagem)
     add rsp, 8                              ;coloca pilha livre
 
-    ;recebendo arquivo de entrada
-    push qword nome_entrada                 ;empilha onde deve ser salvo o nome do arquivo
-    call recebe_arquivo                     ;chamada da função recebe_arquivo(char* nome_entrada)
+    ;TODO: receber arquivo de entrada
+
+    ;solicitar e ler nome do arquivo de saída
+
+    ;exibindo mensagem de arquivo saída
+    push qword msg_saida                    ;empilha a mensagem de saída
+    call escreve_string                     ;chamada função
     add rsp, 8                              ;coloca pilha livre
 
-    ; TODO: solicitar e ler nome do arquivo de saída
+    ;TODO: receber arquivo de saída
+
 
     ; abrir arquivos usando abre_arquivo
 
@@ -192,22 +197,3 @@ escreve_string:
     ret                                    ;retorno
 ;
 ;
-recebe_arquivo:
-    push rbp                               ;rbp antigo
-    mov rbp, rsp                           ;setta novo rbp
-    push rdi                               ;rdi antigo
-    push rsi                               ;rsi antigo
-    push rdx                               ;rdx antigo
-; -------------------------------------------
-; Syscall: sys_read
-    mov rax, 0                             ;sys_read
-    mov rdi, 0                             ;stdin
-    mov rsi, [rbp+16]                      ;nome_entrada
-    mov rdx, 256                           ;max bytes lidos
-    syscall
-; -------------------------------------------
-    pop rdx                                ;restaura rdx
-    pop rsi                                ;restaura rsi
-    pop rdi                                ;restaura rdi
-    pop rbp                                ;restaura rbp
-    ret                                    ;retorno
