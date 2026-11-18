@@ -4,10 +4,8 @@
 global _start
 
 section .data
-    msg_entrada db "Digite o nome do arquivo de entrada: ",0x00A, 0
-    tam_msg_entrada equ $ - msg_entrada
-    msg_saida   db "Digite o nome do arquivo de saída: ", 0x00A, 0
-    tam_msg_saida equ $ - msg_saida
+    msg_entrada db "Digite o nome do arquivo de entrada: ", 0
+    msg_saida   db "Digite o nome do arquivo de saída: ", 0
 
 
 section .bss
@@ -26,9 +24,8 @@ _start:
     ;solicitar e ler nome do arquivo de entrada
 
     ;exibindo mensagem de entrada
-    push qword tam_msg_entrada
     push qword msg_entrada                  ;empilha mensagem de entrada
-    call imprime_tela                       ;chamada função imprime_tela(int tamanho_mensagem, char* mensagem)
+    call escreve_string                       ;chamada função escreve_string(char* mensagem)
     add rsp, 8                              ;coloca pilha livre
 
     ;recebendo arquivo de entrada
@@ -155,20 +152,39 @@ le_byte_arquivo:
     ret                                    ;retorno
 ;
 ;
-imprime_tela:
+escreve_string:
     push rbp                               ;rbp antigo
     mov rbp, rsp                           ;setta novo rbp
     push rdi                               ;rdi antigo
     push rsi                               ;rsi antigo
     push rdx                               ;rdx antigo
+    push rbx                               ;rbx antigo -> contador
+    push rcx                               ;rcx antigo -> i
+
+    ;preparação para o loop
+    mov rsi, [rbp+16]                      ;apontar rsi começo da mensagem
+    mov rbx, 0                             ;zerar contador
+    mov rcx, 0                             ;zerar i
+
+    ;loop descobrir tamanho mensagem
+.laco:
+    cmp byte [rsi+rcx], 0                       ;verifica string acabou
+    je .fim                                ;encerrar laço e imprimir
+    inc rbx                                ;contabiliza caracter
+    inc rcx                                ;avança próximo caracter
+    jmp .laco                              ;reinicia laço
+
+.fim:
 ; -------------------------------------------
 ; Syscall: sys_write
     mov rax, 1                             ;sys_write
     mov rdi, 1                             ;stdout
-    mov rsi, [rbp+16]                      ;msg_entrada
-    mov rdx, [rbp+24]                      ;tam_msg_entrada
+    mov rsi, [rbp+16]                      ;começo mensagem
+    mov rdx, rbx                           ;tamanho calculado
     syscall
 ; -------------------------------------------
+    pop rcx                                ;restaura rcx
+    pop rbx                                ;restaura rbx
     pop rdx                                ;restaura rdx
     pop rsi                                ;restaura rsi
     pop rdi                                ;restaura rdi
