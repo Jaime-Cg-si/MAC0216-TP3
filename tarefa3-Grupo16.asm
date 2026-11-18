@@ -197,3 +197,42 @@ escreve_string:
     ret                                    ;retorno
 ;
 ;
+; grava_string_arquivo(int descritor_arquivo, char* buffer)
+grava_string_arquivo:
+    push rbp                               ;rbp antigo
+    mov rbp, rsp                           ;setta novo rbp
+    push rdi                               ;rdi antigo
+    push rsi                               ;rsi antigo
+    push rdx                               ;rdx antigo
+    push rbx                               ;rbx antigo -> contador
+    push rcx                               ;rcx antigo -> i
+
+    ;preparação laço
+    mov rsi, [rbp+24]                      ;rsi aponta começo mensagem
+    mov rbx, 0                             ;zera contador
+    mov rcx, 0                             ;zera apontador
+
+.laco:
+
+    cmp byte [rsi + rcx], 0                ;verifica fim string
+    je .fim                                ;encerra loop
+    inc rbx                                ;contabiliza caracter
+    inc rcx                                ;incrementa apontador
+    jmp .laco                              ;fecha laço
+
+.fim:
+; -------------------------------------------
+; Syscall: sys_write
+    mov rax, 1                             ;sys_write
+    mov rdi, [rbp+ 16]                     ;descritor arquivo
+    mov rsi, [rbp+24]                      ;começo mensagem
+    mov rdx, rbx                           ;tamanho mensagem
+    syscall
+; -------------------------------------------
+    pop rcx                                ;restaura rcx
+    pop rbx                                ;restaura rbx
+    pop rdx                                ;restaura rdx
+    pop rsi                                ;restaura rsi
+    pop rdi                                ;restaura rdi
+    pop rbp                                ;restaura rbp
+    ret                                    ;retorno
