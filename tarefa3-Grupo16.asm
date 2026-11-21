@@ -67,11 +67,20 @@ _start:
         ;entrando no loop. Enquanto o byte lido for 1
         cmp rax, 0                              ;compara o retorno da leitura com 0 (fim do arquivo)
         jle .fim_arquivo                        ;arquivo de leitura acabou (ou deu erro na leitura)
-        movzx rbx, byte [byte_arq]                   ;salva o byte lido em rbx, zerando as demais posições
+        movzx rbx, byte [byte_arq]              ;salva o byte lido em rbx, zerando as demais posições
 
         ; TODO: determinar se a sequência UTF-8 possui 1, 2, 3 ou 4 bytes
         ; TODO: combinar bits para reconstruir o code point
-        ; TODO: chamar gera_string_hexadecimal e grava_string_arquivo
+
+
+        ;chamar gera_string_hexadecimal e grava_string_arquivo
+
+        ;chamando gera_string_hexadecimal
+        push qword buffer_hex                   ;carregando buffer para escrita do código
+        push qword rbx                          ;carregando codepoint, assumindo que está em RBX
+        call gera_string_hexadecimal            ;chamada função
+        add rsp, 16                             ;coloca pilha livre
+
 
         jmp .laco_leitura
 
@@ -236,3 +245,71 @@ grava_string_arquivo:
     pop rdi                                ;restaura rdi
     pop rbp                                ;restaura rbp
     ret                                    ;retorno
+;
+;
+;gera_string_hexadecimal(int valor, char* buffer)
+gera_string_hexadecimal:
+    push rbp                               ;rbp antigo
+    mov rbp, rsp                           ;novo rbp
+    push rax                               ;rax antigo
+    push rbx                               ;rbx antigo
+    push rcx                               ;rcx antigo
+    push rdx                               ;rdx antigo
+    push r8                                ;r8 antigo
+    push r9                                ;r9 antigo
+
+    ;1. Determinar o valor hex
+    mov rax, [rbp+16]                      ;carrega dividendo
+    mov rbx, 16                            ;carrega divisor
+    mov r8, 0                              ;contador elementos empilhados
+
+.laco_divisao:
+    mov rdx, 0                             ;zerar resto
+    div rbx                                ;RDX tem o resto e RAX o quociente
+    push rdx                               ;empilha resto, para desempilhar na ordem certa
+    inc r8                                 ;aumenta contador elementos empilhados
+    cmp rax, 0                             ;quociente zerou
+    jne .laco_divisao                      ;reinicia caso ainda tenha código
+
+    ;2. Inclusão do '0x'
+    mov rcx, [rbp+24]                      ;carrega início buffer
+    mov r9, 0                              ;indicador posição livre p/ escrita
+    mov byte [rcx + r9], '0'                    ;começa o '0x', colocando apenas 0
+    inc r9                                 ;próxima posição livre
+    mov byte [rcx+r9], 'x'                      ;agora sim '0x'
+    inc r9                                 ;próxima posição livre
+
+    ;3. Tradução de todos os códigos para caracteres
+.traduz:
+    cmp r8, 0                              ;verifica se acabaram os elementos empilhados
+    jle .pronto                            ;termina de carregar o buffer
+    dec r8                                 ;contabiliza o caracter
+    pop rdx                                ;carrega em rdx o caracter
+    cmp rdx, 9                             ;verifica se é um dígito (0-9) ou caracter (A-F)
+    jg .letra                              ;letra
+    add rdx, '0'                           ;transforma o dígito em caracter
+    mov byte [rcx+r9], dl                  ;carrega caracter no buffer
+    inc r9                                 ;próxima posição livre
+    jmp .traduz                            ;reinicia laço
+
+.letra:
+    add rdx, 'A' - 10                      ;converte letra para caracter
+    mov byte [rcx+r9], dl                  ;carrega caracter no buffer
+    inc r9                                 ;próxima posição livre
+    jmp .traduz                            ;reinicia laço
+
+.pronto:
+    mov byte [rcx+r9], 10                  ;adiciona o Line Feed
+    inc r9                                 ;próxima posição livre
+    mov byte [rcx+r9], 0                   ;adiciona NUL
+    ;restauro dos registradores
+    pop r9
+    pop r8
+    pop rdx
+    pop rcx
+    pop rbx
+    pop rax
+    pop rbp
+    ;retorno
+    ret
+
