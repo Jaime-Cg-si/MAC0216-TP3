@@ -81,6 +81,11 @@ _start:
         call gera_string_hexadecimal            ;chamada função
         add rsp, 16                             ;coloca pilha livre
 
+        ;chamando grava_string_arquivo
+        push qword buffer_hex                   ;carregando buffer para escrita no arquivo
+        push qword [descr_saida]                ;descritor arquivo saída
+        call grava_string_arquivo               ;chamada função
+        add rsp, 16                             ;coloca pilha livre
 
         jmp .laco_leitura
 
