@@ -236,3 +236,34 @@ grava_string_arquivo:
     pop rdi                                ;restaura rdi
     pop rbp                                ;restaura rbp
     ret                                    ;retorno
+;
+;
+le_string:
+    ; RBX guarda o endereço do buffer e RCX guarda o tamanho máximo
+    mov rbx, [rsp + 8]
+    mov rcx, [rsp + 16]
+
+    ; usando o syscall para fazer a leitura da entrada do teclado e gravando no endereço dado pelo rbx na memoria
+    .loop:
+    mov rax, 0
+    mov rdi, 0
+    mov rsi, rbx
+    mov rdx, 1
+    syscall
+
+    ; verifica se a varredura chegou em uma quebra de linha
+    cmp byte [rbx], 0x0A
+    je .fim
+
+    ; incrementa rbx para repetir o syscall em um novo rbx
+    inc rbx
+    jmp .loop
+
+    .fim:
+
+    ; grava o terminador 0x00 na memória apontada por RBX e calcula o tamanho final em RAX
+    mov byte [rbx], 0x00
+    mov rax, rbx
+    sub rax, [rsp + 8]
+
+    ret
