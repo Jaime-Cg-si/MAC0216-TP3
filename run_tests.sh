@@ -7,8 +7,9 @@
 #   {arquivo}  compara a saída de arquivos_enunciado/{arquivo}.txt com
 #              arquivos_enunciado/{arquivo}_saida.txt
 #   exaustivo  converte todos os code points válidos do Unicode
+#   erros      verifica status, mensagem e arquivos nos casos de erro e de borda
 #
-# Exemplo: ./run_tests.sh teste2_multibyte exaustivo
+# Exemplo: ./run_tests.sh 2_multibyte erros
 
 set -u
 
@@ -63,6 +64,108 @@ open(sys.argv[2], "w").write("".join(f"0x{c:X}\n" for c in cps))
     rm -f "$entrada" "$esperado" "$saida"
 }
 
+# Recria o diretório de trabalho dos casos de erro.
+prepara_caso() {
+    rm -rf "$caso_dir"
+    mkdir -p "$caso_dir/d"
+    printf 'x\n' >"$caso_dir/i.txt"
+    printf 'manter\n' >"$caso_dir/o.txt"
+    ln -s i.txt "$caso_dir/l.txt"
+    ln "$caso_dir/i.txt" "$caso_dir/h.txt"
+    : >"$caso_dir/vazio.txt"
+    printf '\xC3' >"$caso_dir/t2.txt"
+    printf '\xE2\x82' >"$caso_dir/t3.txt"
+    printf '\xF0\x9F\x98' >"$caso_dir/t4.txt"
+    printf 'q\n' >"$caso_dir/$nome_254"
+}
+
+# Uso: caso {nome} {status} {mensagem} {stdin} {arquivo} [conteúdo]
+#
+# Roda o programa com {stdin} (interpretado por printf %b) e confere o status, a mensagem e o
+# {arquivo}: ele deve ter exatamente [conteúdo] ou, sem esse argumento, não existir.
+caso() {
+    local nome="$1" status_esperado="$2" msg="$3" stdin="$4" arquivo="$5"
+    local saida_prog status falha=""
+
+    prepara_caso
+    saida_prog="$(cd "$caso_dir" && printf '%b' "$stdin" | "$main")"
+    status=$?
+
+    if [ "$status" -ne "$status_esperado" ]; then
+        falha="status $status, esperado $status_esperado"
+    elif [[ "$saida_prog" != *"$msg"* ]]; then
+        falha="mensagem esperada ausente: $msg"
+    elif [ "$#" -ge 6 ]; then
+        if [ ! -f "$caso_dir/$arquivo" ]; then
+            falha="$arquivo não existe"
+        elif ! printf '%b' "$6" | cmp -s - "$caso_dir/$arquivo"; then
+            falha="conteúdo incorreto em $arquivo"
+        fi
+    elif [ -e "$caso_dir/$arquivo" ]; then
+        falha="$arquivo não deveria existir"
+    fi
+    relata "erros: $nome" "$falha"
+}
+
+teste_erros() {
+    msg_nome="Erro: nome de arquivo muito longo."
+    msg_entrada="Erro: não foi possível abrir o arquivo de entrada."
+    msg_saida="Erro: não foi possível abrir o arquivo de saída."
+    msg_mesmo="Erro: entrada e saída são o mesmo arquivo."
+    msg_leitura="Erro: falha ao ler o arquivo de entrada."
+    msg_escrita="Erro: falha ao gravar o arquivo de saída."
+
+    caso_dir="$tempdir/caso"
+    nome_254="$(printf 'a%.0s' {1..254})"
+    local nome_255="${nome_254}a" nome_300
+    nome_300="$(printf 'b%.0s' {1..300})"
+    local saida_x='0x78\n0xA\n'
+
+    # a entrada nunca pode ser truncada por ser também a saída
+    caso "saída igual à entrada" 1 "$msg_mesmo" 'i.txt\ni.txt\n' i.txt 'x\n'
+    caso "saída por caminho alternativo" 1 "$msg_mesmo" 'i.txt\nd/../i.txt\n' i.txt 'x\n'
+    caso "saída por symlink" 1 "$msg_mesmo" 'i.txt\nl.txt\n' i.txt 'x\n'
+    caso "saída por hardlink" 1 "$msg_mesmo" 'i.txt\nh.txt\n' i.txt 'x\n'
+
+    # uma entrada inválida não pode criar nem apagar a saída
+    caso "entrada diretório preserva saída" 1 "$msg_leitura" 'd\no.txt\n' o.txt 'manter\n'
+    caso "entrada diretório não cria saída" 1 "$msg_leitura" 'd\nnovo.txt\n' novo.txt
+    caso "entrada inexistente preserva saída" 1 "$msg_entrada" 'nao.txt\no.txt\n' o.txt 'manter\n'
+    caso "entrada inexistente não cria saída" 1 "$msg_entrada" 'nao.txt\nnovo.txt\n' novo.txt
+    caso "nome de entrada vazio" 1 "$msg_entrada" '\nnovo.txt\n' novo.txt
+    caso "stdin vazio" 1 "$msg_entrada" '' novo.txt
+
+    # falhas na saída
+    caso "saída é diretório" 1 "$msg_saida" 'i.txt\nd\n' i.txt 'x\n'
+    caso "saída em caminho inexistente" 1 "$msg_saida" 'i.txt\nnao/o.txt\n' nao/o.txt
+    caso "nome de saída vazio" 1 "$msg_saida" 'i.txt\n\n' i.txt 'x\n'
+    caso "stdin sem segundo nome" 1 "$msg_saida" 'i.txt' i.txt 'x\n'
+    if [ -w /dev/full ]; then
+        caso "disco cheio" 1 "$msg_escrita" 'i.txt\n/dev/full\n' i.txt 'x\n'
+    fi
+
+    # sequências UTF-8 cortadas pelo fim do arquivo
+    caso "UTF-8 truncado em 2 bytes" 1 "$msg_leitura" 't2.txt\nnovo.txt\n' novo.txt ''
+    caso "UTF-8 truncado em 3 bytes" 1 "$msg_leitura" 't3.txt\nnovo.txt\n' novo.txt ''
+    caso "UTF-8 truncado em 4 bytes" 1 "$msg_leitura" 't4.txt\nnovo.txt\n' novo.txt ''
+
+    # limites do nome de arquivo
+    caso "entrada com 254 caracteres" 0 "" "$nome_254\\nnovo.txt\\n" novo.txt '0x71\n0xA\n'
+    caso "saída com 254 caracteres" 0 "" "i.txt\\n$nome_254\\n" "$nome_254" "$saida_x"
+    caso "entrada com 255 caracteres" 1 "$msg_nome" "$nome_255\\nnovo.txt\\n" novo.txt
+    caso "saída com 255 caracteres" 1 "$msg_nome" "i.txt\\n$nome_255\\n" "$nome_255"
+    caso "entrada com 300 caracteres" 1 "$msg_nome" "$nome_300\\nnovo.txt\\n" novo.txt
+    caso "saída com 300 caracteres" 1 "$msg_nome" "i.txt\\n$nome_300\\n" "$nome_300"
+
+    # casos de borda válidos
+    caso "entrada vazia cria saída vazia" 0 "" 'vazio.txt\nnovo.txt\n' novo.txt ''
+    caso "entrada vazia trunca saída" 0 "" 'vazio.txt\no.txt\n' o.txt ''
+    caso "sobrescreve saída maior" 0 "" 'i.txt\no.txt\n' o.txt "$saida_x"
+    caso "segundo nome sem LF final" 0 "" 'i.txt\nnovo.txt' novo.txt "$saida_x"
+
+    rm -rf "$caso_dir"
+}
+
 main() {
     cd "$(dirname "${BASH_SOURCE[0]}")" || exit 2
 
@@ -82,12 +185,13 @@ main() {
             esac
             tests+=("$(basename "$f" .txt)")
         done
-        tests+=(exaustivo)
+        tests+=(exaustivo erros)
     fi
 
     for t in "${tests[@]}"; do
         case "$t" in
         exaustivo) teste_exaustivo ;;
+        erros) teste_erros ;;
         *) teste_arquivo "$t" ;;
         esac
     done
