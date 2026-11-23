@@ -9,6 +9,13 @@ section .data
 msg_entrada db "Digite o nome do arquivo de entrada: ", 0
 msg_saida   db "Digite o nome do arquivo de saída: ", 0
 
+msg_erro_nome    db "Erro: nome de arquivo muito longo.", 10, 0
+msg_erro_entrada db "Erro: não foi possível abrir o arquivo de entrada.", 10, 0
+msg_erro_saida   db "Erro: não foi possível abrir o arquivo de saída.", 10, 0
+msg_erro_mesmo   db "Erro: entrada e saída são o mesmo arquivo.", 10, 0
+msg_erro_leitura db "Erro: falha ao ler o arquivo de entrada.", 10, 0
+msg_erro_escrita db "Erro: falha ao gravar o arquivo de saída.", 10, 0
+
 section .bss
 
 nome_entrada  resb TAM_NOME
@@ -34,6 +41,8 @@ _start:
     push qword nome_entrada            ; buffer do nome
     call le_string                     ; chamada função
     add  rsp, 16                       ; coloca pilha livre
+    cmp  rax, TAM_NOME - 1             ; buffer cheio: o nome pode ter sido cortado
+    jae  .erro_nome                    ; não abre um arquivo com nome errado
 
 ; solicitar e ler nome do arquivo de saída
 
@@ -47,6 +56,8 @@ _start:
     push qword nome_saida              ; buffer do nome
     call le_string                     ; chamada função
     add  rsp, 16                       ; coloca pilha livre
+    cmp  rax, TAM_NOME - 1             ; buffer cheio: o nome pode ter sido cortado
+    jae  .erro_nome                    ; não cria um arquivo com nome errado
 
 ; abrir arquivos usando abre_arquivo
 
@@ -56,6 +67,16 @@ _start:
     call abre_arquivo                  ; chamada função
     mov  [descr_entrada], rax          ; copia descritor entrada
     add  rsp, 16                       ; coloca pilha livre
+    cmp  rax, 0                        ; descritor negativo indica erro
+    jl   .erro_abre_entrada            ; encerra antes de tocar na saída
+
+; Impede que a abertura com truncamento apague o arquivo de entrada
+    push qword nome_saida              ; nome do arquivo de saída
+    push qword [descr_entrada]         ; descritor do arquivo de entrada
+    call mesmo_arquivo                 ; chamada função
+    add  rsp, 16                       ; coloca pilha livre
+    cmp  rax, 0                        ; 0 indica arquivos diferentes
+    jne  .erro_mesmo_arquivo           ; encerra sem truncar
 
 ; Abrindo arquivo de saída
     push qword 577                     ; modo abertura - escrita, criação truncamento
@@ -63,6 +84,8 @@ _start:
     call abre_arquivo                  ; chamada função
     mov  [descr_saida], rax            ; copia descritor saída
     add  rsp, 16                       ; coloca pilha livre
+    cmp  rax, 0                        ; descritor negativo indica erro
+    jl   .erro_abre_saida              ; encerra informando a falha
 
 ; loop de leitura: cada iteração processa um caractere UTF-8
 .laco_leitura:
@@ -73,7 +96,8 @@ _start:
 
 ; entrando no loop. Enquanto o byte lido for 1
     cmp   rax, 0                       ; compara o retorno da leitura com 0 (fim do arquivo)
-    jle   .fim_arquivo                 ; arquivo de leitura acabou (ou deu erro na leitura)
+    je    .fim_arquivo                 ; arquivo de leitura acabou
+    jl    .erro_leitura                ; retorno negativo indica erro
     movzx rbx, byte [byte_arq]         ; salva o byte lido em rbx, zerando as demais posições
 
 ; identifica o tamanho da sequência e reconstrói o code point
@@ -82,7 +106,7 @@ _start:
     call decodifica_utf8               ; chamada função
     add  rsp, 16                       ; coloca pilha livre
     cmp  rax, 0                        ; verifica erro na leitura da continuação
-    jl   .fim_arquivo                  ; encerra a leitura
+    jl   .erro_leitura                 ; encerra informando a falha
     mov  rbx, rax                      ; code point em rbx
 
 ; chamar gera_string_hexadecimal e grava_string_arquivo
@@ -98,6 +122,8 @@ _start:
     push qword [descr_saida]           ; descritor arquivo saída
     call grava_string_arquivo          ; chamada função
     add  rsp, 16                       ; coloca pilha livre
+    cmp  rax, 0                        ; retorno negativo indica erro
+    jl   .erro_escrita                 ; encerra informando a falha
 
     jmp .laco_leitura
 
@@ -112,7 +138,46 @@ _start:
     push qword [descr_saida]
     call fecha_arquivo
     add  rsp, 8
-    jmp  fim_programa                  ; encerra programa
+    cmp  rax, 0                        ; o fechamento pode revelar falha de gravação
+    jge  fim_programa                  ; encerra programa com sucesso
+    push qword msg_erro_escrita        ; mensagem de erro
+    call encerra_com_erro              ; não retorna
+
+; tratamento de erros
+.erro_nome:
+    push qword msg_erro_nome           ; nenhum arquivo aberto
+    call encerra_com_erro              ; não retorna
+
+.erro_abre_entrada:
+    push qword msg_erro_entrada        ; nenhum arquivo aberto
+    call encerra_com_erro              ; não retorna
+
+.erro_mesmo_arquivo:
+    mov rbx, msg_erro_mesmo            ; apenas a entrada está aberta
+    jmp .fecha_entrada_e_encerra
+
+.erro_abre_saida:
+    mov rbx, msg_erro_saida            ; apenas a entrada está aberta
+    jmp .fecha_entrada_e_encerra
+
+.erro_leitura:
+    mov rbx, msg_erro_leitura          ; os dois arquivos estão abertos
+    jmp .fecha_saida_e_encerra
+
+.erro_escrita:
+    mov rbx, msg_erro_escrita          ; os dois arquivos estão abertos
+
+.fecha_saida_e_encerra:
+    push qword [descr_saida]
+    call fecha_arquivo
+    add  rsp, 8
+
+.fecha_entrada_e_encerra:
+    push qword [descr_entrada]
+    call fecha_arquivo
+    add  rsp, 8
+    push rbx                           ; mensagem de erro
+    call encerra_com_erro              ; não retorna
 
 ; ;
 fim_programa:
@@ -122,6 +187,77 @@ fim_programa:
     mov     rdi, 0                     ; sucesso
     syscall
 ; -------------------------------------------
+
+; encerra_com_erro(char* mensagem)
+; Escreve a mensagem e encerra o programa com status 1. Não retorna.
+encerra_com_erro:
+    push rbp                           ; rbp antigo
+    mov  rbp, rsp                      ; setta novo rbp
+    push qword [rbp+16]                ; mensagem de erro
+    call escreve_string                ; chamada função
+    add  rsp, 8                        ; coloca pilha livre
+                                       ; -------------------------------------------
+                                       ; Syscall: sys_exit
+    mov     rax, 60                    ; sys_exit
+    mov     rdi, 1                     ; erro
+    syscall
+; -------------------------------------------
+
+; mesmo_arquivo(int descritor_arquivo, char* nome_arquivo)
+; Compara dispositivo e inode, o que também detecta links e caminhos alternativos.
+; Retorno: RAX = 1 se forem o mesmo arquivo ou se não for possível verificar o
+; descritor, 0 se forem diferentes ou se o nome ainda não existir.
+mesmo_arquivo:
+    push rbp                           ; rbp antigo
+    mov  rbp, rsp                      ; setta novo rbp
+    push rdi                           ; rdi antigo
+    push rsi                           ; rsi antigo
+    push rcx                           ; rcx antigo (destruído pela syscall)
+    push r11                           ; r11 antigo (destruído pela syscall)
+    push r8                            ; r8 antigo
+    sub  rsp, 288                      ; duas struct stat de 144 bytes
+                                       ; -------------------------------------------
+                                       ; Syscall: sys_fstat
+    mov     rax, 5                     ; sys_fstat
+    mov     rdi, [rbp+16]              ; descritor do arquivo
+    mov     rsi, rsp                   ; primeira struct stat
+    syscall
+; -------------------------------------------
+    cmp rax, 0                         ; verifica erro
+    jl  .iguais                        ; sem verificação, não arrisca truncar
+                                       ; -------------------------------------------
+                                       ; Syscall: sys_stat
+    mov     rax, 4                     ; sys_stat
+    mov     rdi, [rbp+24]              ; nome do arquivo
+    lea     rsi, [rsp+144]             ; segunda struct stat
+    syscall
+; -------------------------------------------
+    cmp rax, 0                         ; verifica erro
+    jl  .diferentes                    ; nome inexistente não pode ser a entrada
+
+    mov r8, [rsp]                      ; st_dev da entrada
+    cmp r8, [rsp+144]                  ; compara com st_dev da saída
+    jne .diferentes
+    mov r8, [rsp+8]                    ; st_ino da entrada
+    cmp r8, [rsp+152]                  ; compara com st_ino da saída
+    jne .diferentes
+
+.iguais:
+    mov rax, 1                         ; mesmo arquivo
+    jmp .retorno
+
+.diferentes:
+    mov rax, 0                         ; arquivos diferentes
+
+.retorno:
+    add rsp, 288                       ; libera as structs
+    pop r8                             ; restaura r8
+    pop r11                            ; restaura r11
+    pop rcx                            ; restaura rcx
+    pop rsi                            ; restaura rsi
+    pop rdi                            ; restaura rdi
+    pop rbp                            ; restaura rbp
+    ret                                ; retorno
 
 ; decodifica_utf8(int descritor_arquivo, int byte_inicial)
 ; Identifica o tamanho da sequência pelo byte inicial, lê os bytes de continuação e
@@ -195,6 +331,8 @@ decodifica_utf8:
     pop rbp                            ; restaura rbp
     ret                                ; retorno
 
+; fecha_arquivo(int descritor_arquivo)
+; Retorno: RAX = 0 em caso de sucesso, ou valor negativo em caso de erro.
 fecha_arquivo:
     push rbp                           ; empilha rbp anterior
     mov  rbp, rsp                      ; setta o novo rbp
@@ -368,6 +506,8 @@ escreve_string:
     ret                                ; retorno
 
 ; grava_string_arquivo(int descritor_arquivo, char* buffer)
+; Repete a escrita até gravar toda a string, sem o NUL.
+; Retorno: RAX = bytes gravados, ou valor negativo em caso de erro.
 grava_string_arquivo:
     push rbp                           ; rbp antigo
     mov  rbp, rsp                      ; setta novo rbp
@@ -392,14 +532,33 @@ grava_string_arquivo:
     jmp .laco                          ; fecha laço
 
 .fim:
+    mov rdi, [rbp+16]                  ; descritor arquivo
+    mov rsi, [rbp+24]                  ; começo mensagem
+    mov rdx, rbx                       ; bytes restantes
+
+.escreve:
+    cmp rdx, 0                         ; verifica se restam bytes
+    je  .sucesso
 ; -------------------------------------------
 ; Syscall: sys_write
     mov     rax, 1                     ; sys_write
-    mov     rdi, [rbp+ 16]             ; descritor arquivo
-    mov     rsi, [rbp+24]              ; começo mensagem
-    mov     rdx, rbx                   ; tamanho mensagem
     syscall
 ; -------------------------------------------
+    cmp rax, 0                         ; verifica resultado
+    jl  .retorno                       ; devolve o erro da syscall
+    je  .sem_progresso                 ; evita laço infinito
+    add rsi, rax                       ; avança no buffer
+    sub rdx, rax                       ; desconta bytes gravados
+    jmp .escreve                       ; grava o restante
+
+.sem_progresso:
+    mov rax, -5                        ; -EIO
+    jmp .retorno
+
+.sucesso:
+    mov rax, rbx                       ; retorna total gravado
+
+.retorno:
     pop r11                            ; restaura r11
     pop rcx                            ; restaura rcx
     pop rbx                            ; restaura rbx
