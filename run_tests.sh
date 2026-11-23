@@ -6,8 +6,9 @@
 # Sem argumentos, roda todos os testes. Cada nome pode ser:
 #   {arquivo}  compara a saída de arquivos_enunciado/{arquivo}.txt com
 #              arquivos_enunciado/{arquivo}_saida.txt
+#   exaustivo  converte todos os code points válidos do Unicode
 #
-# Exemplo: ./run_tests.sh teste1_ascii teste2_multibyte
+# Exemplo: ./run_tests.sh teste2_multibyte exaustivo
 
 set -u
 
@@ -33,6 +34,35 @@ teste_arquivo() {
     fi
 }
 
+# Converte todos os escalares Unicode, exceto os substitutos (U+D800 a U+DFFF). A entrada
+# tem mais de 4 MiB, então as sequências também cruzam fronteiras de página.
+teste_exaustivo() {
+    local entrada="$tempdir/exaustivo.in"
+    local saida="$tempdir/exaustivo.out"
+    local esperado="$tempdir/exaustivo.esperado"
+
+    if ! python3 -I -c '
+import sys
+cps = [c for c in range(0x110000) if not 0xD800 <= c <= 0xDFFF]
+open(sys.argv[1], "wb").write("".join(map(chr, cps)).encode("utf-8"))
+open(sys.argv[2], "w").write("".join(f"0x{c:X}\n" for c in cps))
+' "$entrada" "$esperado"; then
+        relata exaustivo "não foi possível gerar a entrada"
+        return
+    fi
+
+    printf '%s\n%s\n' "$entrada" "$saida" | "$main" >/dev/null
+    local status=$?
+    if [ "$status" -ne 0 ]; then
+        relata exaustivo "status $status"
+    elif ! cmp "$saida" "$esperado"; then
+        relata exaustivo "saída diferente da esperada"
+    else
+        relata exaustivo ""
+    fi
+    rm -f "$entrada" "$esperado" "$saida"
+}
+
 main() {
     cd "$(dirname "${BASH_SOURCE[0]}")" || exit 2
 
@@ -52,10 +82,12 @@ main() {
             esac
             tests+=("$(basename "$f" .txt)")
         done
+        tests+=(exaustivo)
     fi
 
     for t in "${tests[@]}"; do
         case "$t" in
+        exaustivo) teste_exaustivo ;;
         *) teste_arquivo "$t" ;;
         esac
     done
