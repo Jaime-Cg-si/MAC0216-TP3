@@ -19,6 +19,14 @@ entry = "shfmt -i 4 -w"
 types = ["shell"]
 exclude_types = ["zsh", "ksh"]
 
+[[repos.hooks]]
+id = "shellcheck"
+name = "shellcheck"
+language = "system"
+entry = "shellcheck"
+types = ["shell"]
+exclude_types = ["zsh"]
+
 [[repos]]
 repo = "builtin"
 hooks = [
