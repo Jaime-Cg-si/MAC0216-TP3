@@ -29,42 +29,42 @@ code_point    resq 1
 section .text
 
 _start:
-; solicitar e ler nome do arquivo de entrada
+; solicita e lê nome do arquivo de entrada
 
-; exibindo mensagem de entrada
+; exibe mensagem de entrada
     push qword msg_entrada             ; empilha mensagem de entrada
-    call escreve_string                ; chamada função escreve_string(char* mensagem)
+    call escreve_string                ; chama função escreve_string(char* mensagem)
     add  rsp, 8                        ; coloca pilha livre
 
-; recebendo nome do arquivo de entrada
+; recebe nome do arquivo de entrada
     push qword TAM_NOME                ; tamanho máximo, contando o NUL
     push qword nome_entrada            ; buffer do nome
-    call le_string                     ; chamada função
+    call le_string                     ; chama função
     add  rsp, 16                       ; coloca pilha livre
     cmp  rax, TAM_NOME - 1             ; buffer cheio: o nome pode ter sido cortado
     jae  .erro_nome                    ; não abre um arquivo com nome errado
 
-; solicitar e ler nome do arquivo de saída
+; solicita e lê nome do arquivo de saída
 
-; exibindo mensagem de arquivo saída
+; exibe mensagem de arquivo saída
     push qword msg_saida               ; empilha a mensagem de saída
-    call escreve_string                ; chamada função
+    call escreve_string                ; chama função
     add  rsp, 8                        ; coloca pilha livre
 
-; recebendo nome do arquivo de saída
+; recebe nome do arquivo de saída
     push qword TAM_NOME                ; tamanho máximo, contando o NUL
     push qword nome_saida              ; buffer do nome
-    call le_string                     ; chamada função
+    call le_string                     ; chama função
     add  rsp, 16                       ; coloca pilha livre
     cmp  rax, TAM_NOME - 1             ; buffer cheio: o nome pode ter sido cortado
     jae  .erro_nome                    ; não cria um arquivo com nome errado
 
-; abrir arquivos usando abre_arquivo
+; abre arquivos usando abre_arquivo
 
-; Abrindo arquivo de entrada
+; Abre arquivo de entrada
     push qword 0                       ; modo de abertura - leitura
     push qword nome_entrada            ; endereço de onde começa string
-    call abre_arquivo                  ; chamada função
+    call abre_arquivo                  ; chama função
     mov  [descr_entrada], rax          ; copia descritor entrada
     add  rsp, 16                       ; coloca pilha livre
     cmp  rax, 0                        ; descritor negativo indica erro
@@ -73,15 +73,15 @@ _start:
 ; Impede que a abertura com truncamento apague o arquivo de entrada
     push qword nome_saida              ; nome do arquivo de saída
     push qword [descr_entrada]         ; descritor do arquivo de entrada
-    call mesmo_arquivo                 ; chamada função
+    call mesmo_arquivo                 ; chama função
     add  rsp, 16                       ; coloca pilha livre
     cmp  rax, 0                        ; 0 indica arquivos diferentes
     jne  .erro_mesmo_arquivo           ; encerra sem truncar
 
-; Abrindo arquivo de saída
+; Abre arquivo de saída
     push qword 577                     ; modo abertura - escrita, criação truncamento
     push qword nome_saida              ; endereço de onde começa o nome do arquivo de saída
-    call abre_arquivo                  ; chamada função
+    call abre_arquivo                  ; chama função
     mov  [descr_saida], rax            ; copia descritor saída
     add  rsp, 16                       ; coloca pilha livre
     cmp  rax, 0                        ; descritor negativo indica erro
@@ -89,38 +89,38 @@ _start:
 
 ; loop de leitura: cada iteração processa um caractere UTF-8
 .laco_leitura:
-    push qword byte_arq                ; carregando byte a ser lido (atualizado pela própria sys_read)
-    push qword [descr_entrada]         ; carregando o descritor do arquivo a ser lido
-    call le_byte_arquivo               ; chamada função
+    push qword byte_arq                ; carrega byte a ser lido (atualizado pela própria sys_read)
+    push qword [descr_entrada]         ; carrega o descritor do arquivo a ser lido
+    call le_byte_arquivo               ; chama função
     add  rsp, 16                       ; coloca pilha livre
 
-; entrando no loop. Enquanto o byte lido for 1
+; entra no loop. Enquanto o byte lido for 1
     cmp   rax, 0                       ; compara o retorno da leitura com 0 (fim do arquivo)
-    je    .fim_arquivo                 ; arquivo de leitura acabou
+    je    .fim_arquivo                 ; encerra o laço no fim do arquivo
     jl    .erro_leitura                ; retorno negativo indica erro
     movzx rbx, byte [byte_arq]         ; salva o byte lido em rbx, zerando as demais posições
 
 ; identifica o tamanho da sequência e reconstrói o code point
     push qword rbx                     ; byte inicial da sequência
     push qword [descr_entrada]         ; descritor do arquivo de entrada
-    call decodifica_utf8               ; chamada função
+    call decodifica_utf8               ; chama função
     add  rsp, 16                       ; coloca pilha livre
     cmp  rax, 0                        ; verifica erro na leitura da continuação
     jl   .erro_leitura                 ; encerra informando a falha
     mov  rbx, rax                      ; code point em rbx
 
-; chamar gera_string_hexadecimal e grava_string_arquivo
+; chama gera_string_hexadecimal e grava_string_arquivo
 
-; chamando gera_string_hexadecimal
-    push qword buffer_hex              ; carregando buffer para escrita do código
-    push qword rbx                     ; carregando codepoint, assumindo que está em RBX
-    call gera_string_hexadecimal       ; chamada função
+; chama gera_string_hexadecimal
+    push qword buffer_hex              ; carrega buffer para escrita do código
+    push qword rbx                     ; carrega codepoint, assumindo que está em RBX
+    call gera_string_hexadecimal       ; chama função
     add  rsp, 16                       ; coloca pilha livre
 
-; chamando grava_string_arquivo
-    push qword buffer_hex              ; carregando buffer para escrita no arquivo
+; chama grava_string_arquivo
+    push qword buffer_hex              ; carrega buffer para escrita no arquivo
     push qword [descr_saida]           ; descritor arquivo saída
-    call grava_string_arquivo          ; chamada função
+    call grava_string_arquivo          ; chama função
     add  rsp, 16                       ; coloca pilha livre
     cmp  rax, 0                        ; retorno negativo indica erro
     jl   .erro_escrita                 ; encerra informando a falha
@@ -128,10 +128,10 @@ _start:
     jmp .laco_leitura
 
 .fim_arquivo:
-; fechar os arquivos e encerrar com sys_exit
+; fecha os arquivos e encerra com sys_exit
 ; fecha o arquivo de entrada
     push qword [descr_entrada]
-    call fecha_arquivo                 ; chamada da função
+    call fecha_arquivo                 ; chama a função
     add  rsp, 8                        ; coloca pilha livre
 
 ; fecha o arquivo de saída
@@ -143,7 +143,7 @@ _start:
     push qword msg_erro_escrita        ; mensagem de erro
     call encerra_com_erro              ; não retorna
 
-; tratamento de erros
+; trata erros
 .erro_nome:
     push qword msg_erro_nome           ; nenhum arquivo aberto
     call encerra_com_erro              ; não retorna
@@ -194,7 +194,7 @@ encerra_com_erro:
     push rbp                           ; rbp antigo
     mov  rbp, rsp                      ; setta novo rbp
     push qword [rbp+16]                ; mensagem de erro
-    call escreve_string                ; chamada função
+    call escreve_string                ; chama função
     add  rsp, 8                        ; coloca pilha livre
                                        ; -------------------------------------------
                                        ; Syscall: sys_exit
@@ -257,7 +257,7 @@ mesmo_arquivo:
     pop rsi                            ; restaura rsi
     pop rdi                            ; restaura rdi
     pop rbp                            ; restaura rbp
-    ret                                ; retorno
+    ret                                ; retorna
 
 ; decodifica_utf8(int descritor_arquivo, int byte_inicial)
 ; Identifica o tamanho da sequência pelo byte inicial, lê os bytes de continuação e
@@ -304,7 +304,7 @@ decodifica_utf8:
     je   .pronto
     push qword byte_arq                ; destino do byte lido
     push qword [rbp+16]                ; descritor do arquivo
-    call le_byte_arquivo               ; chamada função
+    call le_byte_arquivo               ; chama função
     add  rsp, 16                       ; coloca pilha livre
     cmp  rax, 1                        ; verifica se leu o byte
     jne  .falha
@@ -329,7 +329,7 @@ decodifica_utf8:
     pop rcx                            ; restaura rcx
     pop rbx                            ; restaura rbx
     pop rbp                            ; restaura rbp
-    ret                                ; retorno
+    ret                                ; retorna
 
 ; fecha_arquivo(int descritor_arquivo)
 ; Retorno: RAX = 0 em caso de sucesso, ou valor negativo em caso de erro.
@@ -345,10 +345,10 @@ fecha_arquivo:
     mov     rdi, [rbp+16]              ; rdi recebe o descritor
     syscall
 ; -------------------------------------------
-    pop r11                            ; restaurar r11
-    pop rcx                            ; restaurar rcx
-    pop rdi                            ; restaurar rdi
-    pop rbp                            ; restaurar rbp
+    pop r11                            ; restaura r11
+    pop rcx                            ; restaura rcx
+    pop rdi                            ; restaura rdi
+    pop rbp                            ; restaura rbp
     ret
 
 abre_arquivo:
@@ -398,7 +398,7 @@ le_byte_arquivo:
     pop rsi                            ; restaura rsi
     pop rdi                            ; restaura rdi
     pop rbp                            ; restaura rbp
-    ret                                ; retorno
+    ret                                ; retorna
 
 ; le_string(char* buffer, int tam_max)
 ; Lê uma linha da entrada padrão, um byte por vez, e a armazena terminada em NUL.
@@ -460,7 +460,7 @@ le_string:
     pop rsi                            ; restaura rsi
     pop rdi                            ; restaura rdi
     pop rbp                            ; restaura rbp
-    ret                                ; retorno
+    ret                                ; retorna
 
 escreve_string:
     push rbp                           ; rbp antigo
@@ -473,15 +473,15 @@ escreve_string:
     push r11                           ; r11 antigo (destruído pela syscall)
     push rax                           ; rax antigo (função sem retorno)
 
-; preparação para o loop
-    mov rsi, [rbp+16]                  ; apontar rsi começo da mensagem
-    mov rbx, 0                         ; zerar contador
-    mov rcx, 0                         ; zerar i
+; prepara o loop
+    mov rsi, [rbp+16]                  ; aponta rsi começo da mensagem
+    mov rbx, 0                         ; zera contador
+    mov rcx, 0                         ; zera i
 
-; loop descobrir tamanho mensagem
+; loop descobre tamanho mensagem
 .laco:
-    cmp byte [rsi+rcx], 0              ; verifica string acabou
-    je  .fim                           ; encerrar laço e imprimir
+    cmp byte [rsi+rcx], 0              ; verifica fim da string
+    je  .fim                           ; encerra laço e imprime
     inc rbx                            ; contabiliza caracter
     inc rcx                            ; avança próximo caracter
     jmp .laco                          ; reinicia laço
@@ -503,7 +503,7 @@ escreve_string:
     pop rsi                            ; restaura rsi
     pop rdi                            ; restaura rdi
     pop rbp                            ; restaura rbp
-    ret                                ; retorno
+    ret                                ; retorna
 
 ; grava_string_arquivo(int descritor_arquivo, char* buffer)
 ; Repete a escrita até gravar toda a string, sem o NUL.
@@ -518,7 +518,7 @@ grava_string_arquivo:
     push rcx                           ; rcx antigo -> i
     push r11                           ; r11 antigo (destruído pela syscall)
 
-; preparação laço
+; prepara laço
     mov rsi, [rbp+24]                  ; rsi aponta começo mensagem
     mov rbx, 0                         ; zera contador
     mov rcx, 0                         ; zera apontador
@@ -566,7 +566,7 @@ grava_string_arquivo:
     pop rsi                            ; restaura rsi
     pop rdi                            ; restaura rdi
     pop rbp                            ; restaura rbp
-    ret                                ; retorno
+    ret                                ; retorna
 
 ; gera_string_hexadecimal(int valor, char* buffer)
 gera_string_hexadecimal:
@@ -579,20 +579,20 @@ gera_string_hexadecimal:
     push r8                            ; r8 antigo
     push r9                            ; r9 antigo
 
-; 1. Determinar o valor hex
+; 1. Determina o valor hex
     mov rax, [rbp+16]                  ; carrega dividendo
     mov rbx, 16                        ; carrega divisor
     mov r8, 0                          ; contador elementos empilhados
 
 .laco_divisao:
-    mov  rdx, 0                        ; zerar resto
+    mov  rdx, 0                        ; zera resto
     div  rbx                           ; RDX tem o resto e RAX o quociente
     push rdx                           ; empilha resto, para desempilhar na ordem certa
     inc  r8                            ; aumenta contador elementos empilhados
-    cmp  rax, 0                        ; quociente zerou
+    cmp  rax, 0                        ; verifica se o quociente é zero
     jne  .laco_divisao                 ; reinicia caso ainda tenha código
 
-; 2. Inclusão do '0x'
+; 2. Inclui o '0x'
     mov rcx, [rbp+24]                  ; carrega início buffer
     mov r9, 0                          ; indicador posição livre p/ escrita
     mov byte [rcx + r9], '0'           ; começa o '0x', colocando apenas 0
@@ -601,8 +601,8 @@ gera_string_hexadecimal:
     inc r9                             ; próxima posição livre
 
 .traduz:
-; 3. Tradução de todos os códigos para caracteres
-    cmp r8, 0                          ; verifica se acabaram os elementos empilhados
+; 3. Traduz todos os códigos para caracteres
+    cmp r8, 0                          ; verifica se restam elementos empilhados
     jle .pronto                        ; termina de carregar o buffer
     dec r8                             ; contabiliza o caracter
     pop rdx                            ; carrega em rdx o caracter
@@ -623,7 +623,7 @@ gera_string_hexadecimal:
     mov byte [rcx+r9], 10              ; adiciona o Line Feed
     inc r9                             ; próxima posição livre
     mov byte [rcx+r9], 0               ; adiciona NUL
-                                       ; restauro dos registradores
+                                       ; restaura os registradores
     pop r9
     pop r8
     pop rdx
@@ -631,5 +631,5 @@ gera_string_hexadecimal:
     pop rbx
     pop rax
     pop rbp
-; retorno
+; retorna
     ret
