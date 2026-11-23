@@ -1,0 +1,8 @@
+shell=bash
+
+enable=add-default-case
+enable=check-unassigned-uppercase
+enable=quote-safe-variables
+enable=require-variable-braces
+
+disable=SC2016
