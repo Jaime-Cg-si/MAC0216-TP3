@@ -8,8 +8,9 @@
 #              arquivos_enunciado/{arquivo}_saida.txt
 #   exaustivo  converte todos os code points válidos do Unicode
 #   erros      verifica status, mensagem e arquivos nos casos de erro e de borda
+#   unitario   testa cada função de tarefa3-Grupo16.asm isoladamente (requer gcc)
 #
-# Exemplo: ./run_tests.sh 2_multibyte erros
+# Exemplo: ./run_tests.sh 2_multibyte unitario
 
 set -u
 
@@ -166,6 +167,26 @@ teste_erros() {
     rm -rf "${caso_dir}"
 }
 
+# Compila e roda os testes de testes_unitarios/, com um resultado por função.
+teste_unitario() {
+    local bin="${tempdir}/unit/testes"
+
+    if ! make -s -C testes_unitarios BUILD_DIR="${tempdir}/unit" "${bin}"; then
+        relata unitário "não foi possível compilar"
+        return
+    fi
+
+    "${bin}" </dev/null | sed -E 's/^(OK|FALHOU) /\1 unitário: /'
+    local status="${PIPESTATUS[0]}"
+
+    # status 1 já foi relatado por função; outro valor indica falha na própria execução
+    if [ "${status}" -eq 1 ]; then
+        failed=1
+    elif [ "${status}" -ne 0 ]; then
+        relata unitário "status ${status}"
+    fi
+}
+
 main() {
     cd "$(dirname "${BASH_SOURCE[0]}")" || exit 2
 
@@ -185,13 +206,14 @@ main() {
             *) tests+=("$(basename "${f}" .txt)") ;;
             esac
         done
-        tests+=(exaustivo erros)
+        tests+=(exaustivo erros unitario)
     fi
 
     for t in "${tests[@]}"; do
         case "${t}" in
         exaustivo) teste_exaustivo ;;
         erros) teste_erros ;;
+        unitario) teste_unitario ;;
         *) teste_arquivo "${t}" ;;
         esac
     done
