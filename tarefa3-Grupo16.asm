@@ -1,3 +1,6 @@
+; elimina o aviso de DEFAULT ABS implícito do NASM 3
+default rel
+
 global _start
 
 TAM_NOME equ 256 ; tamanho dos buffers de nome, contando o NUL
