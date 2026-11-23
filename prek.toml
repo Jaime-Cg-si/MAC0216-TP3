@@ -1,5 +1,16 @@
 exclude = { glob = ["arquivos_enunciado/**"] }
 
+# Roda antes dos hooks builtin. O nasmfmt deixa espaço após instruções sem operandos e
+# acrescenta uma linha em branco ao fim do arquivo, então o próprio hook remove ambos.
+[[repos]]
+repo = "local"
+[[repos.hooks]]
+id = "nasmfmt"
+name = "nasmfmt"
+language = "system"
+entry = '''bash -c 'nasmfmt -ii 4 "$@" && sed -i -E -e "s/[[:space:]]+$//" -e :a -e "/^\n*$/{\$d;N;ba" -e "}" "$@"' --'''
+files = '\.asm$'
+
 [[repos]]
 repo = "builtin"
 hooks = [
