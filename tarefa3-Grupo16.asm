@@ -196,8 +196,9 @@ encerra_com_erro:
     push qword [rbp+16]                ; mensagem de erro
     call escreve_string                ; chama função
     add  rsp, 8                        ; coloca pilha livre
-                                       ; -------------------------------------------
-                                       ; Syscall: sys_exit
+
+; -------------------------------------------
+; Syscall: sys_exit
     mov     rax, 60                    ; sys_exit
     mov     rdi, 1                     ; erro
     syscall
@@ -216,8 +217,9 @@ mesmo_arquivo:
     push r11                           ; r11 antigo (destruído pela syscall)
     push r8                            ; r8 antigo
     sub  rsp, 288                      ; duas struct stat de 144 bytes
-                                       ; -------------------------------------------
-                                       ; Syscall: sys_fstat
+
+; -------------------------------------------
+; Syscall: sys_fstat
     mov     rax, 5                     ; sys_fstat
     mov     rdi, [rbp+16]              ; descritor do arquivo
     mov     rsi, rsp                   ; primeira struct stat
@@ -225,8 +227,9 @@ mesmo_arquivo:
 ; -------------------------------------------
     cmp rax, 0                         ; verifica erro
     jl  .iguais                        ; sem verificação, não arrisca truncar
-                                       ; -------------------------------------------
-                                       ; Syscall: sys_stat
+
+; -------------------------------------------
+; Syscall: sys_stat
     mov     rax, 4                     ; sys_stat
     mov     rdi, [rbp+24]              ; nome do arquivo
     lea     rsi, [rsp+144]             ; segunda struct stat
@@ -339,8 +342,9 @@ fecha_arquivo:
     push rdi                           ; empilha rdi anterior
     push rcx                           ; empilha rcx anterior (destruído pela syscall)
     push r11                           ; empilha r11 anterior (destruído pela syscall)
-                                       ; -------------------------------------------
-                                       ; Syscall: sys_close
+
+; -------------------------------------------
+; Syscall: sys_close
     mov     rax, 3                     ; sys_close
     mov     rdi, [rbp+16]              ; rdi recebe o descritor
     syscall
@@ -359,8 +363,9 @@ abre_arquivo:
     push rdx                           ; salva rdx antigo
     push rcx                           ; salva rcx antigo (destruído pela syscall)
     push r11                           ; salva r11 antigo (destruído pela syscall)
-                                       ; -------------------------------------------
-                                       ; Syscall: sys_open
+
+; -------------------------------------------
+; Syscall: sys_open
     mov     rax, 2                     ; sys_open
     mov     rdi, [rbp+16]              ; endereço do começo do nome do arquivo
     mov     rsi, [rbp+24]              ; modo de abertura
@@ -384,8 +389,9 @@ le_byte_arquivo:
     push rdx                           ; rdx antigo
     push rcx                           ; rcx antigo (destruído pela syscall)
     push r11                           ; r11 antigo (destruído pela syscall)
-                                       ; -------------------------------------------
-                                       ; Syscall: sys_read
+
+; -------------------------------------------
+; Syscall: sys_read
     mov     rax, 0                     ; sys_read
     mov     rdi, [rbp+16]              ; carrega descritor em rdi
     mov     rsi, [rbp+24]              ; carrega byte_arq em rsi
@@ -623,7 +629,8 @@ gera_string_hexadecimal:
     mov byte [rcx+r9], 10              ; adiciona o Line Feed
     inc r9                             ; próxima posição livre
     mov byte [rcx+r9], 0               ; adiciona NUL
-                                       ; restaura os registradores
+
+; restaura os registradores
     pop r9
     pop r8
     pop rdx
