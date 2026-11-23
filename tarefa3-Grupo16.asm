@@ -79,6 +79,16 @@ _start:
     cmp  rax, 0                        ; 0 indica arquivos diferentes
     jne  .erro_mesmo_arquivo           ; encerra sem truncar
 
+; lê o primeiro byte antes de truncar a saída, para preservá-la se a entrada for
+; ilegível (por exemplo, um diretório)
+    push qword byte_arq                ; destino do byte lido
+    push qword [descr_entrada]         ; descritor do arquivo de entrada
+    call le_byte_arquivo               ; chama função
+    add  rsp, 16                       ; coloca pilha livre
+    cmp  rax, 0                        ; retorno negativo indica erro
+    jl   .erro_primeira_leitura        ; encerra sem tocar na saída
+    mov  rbx, rax                      ; guarda o retorno durante a abertura da saída
+
 ; abre arquivo de saída
     push qword 577                     ; modo abertura - escrita, criação truncamento
     push qword nome_saida              ; endereço de onde começa o nome do arquivo de saída
@@ -87,6 +97,8 @@ _start:
     add  rsp, 16                       ; coloca pilha livre
     cmp  rax, 0                        ; descritor negativo indica erro
     jl   .erro_abre_saida              ; encerra informando a falha
+    mov  rax, rbx                      ; retorno da primeira leitura
+    jmp  .verifica_leitura             ; processa o byte já lido
 
 ; loop de leitura: cada iteração processa um caractere UTF-8
 .laco_leitura:
@@ -96,6 +108,7 @@ _start:
     add  rsp, 16                       ; coloca pilha livre
 
 ; entra no loop enquanto o byte lido for 1
+.verifica_leitura:
     cmp   rax, 0                       ; compara o retorno da leitura com 0 (fim do arquivo)
     je    .fim_arquivo                 ; encerra o laço no fim do arquivo
     jl    .erro_leitura                ; retorno negativo indica erro
@@ -159,6 +172,10 @@ _start:
 
 .erro_abre_saida:
     mov rbx, msg_erro_saida            ; apenas a entrada está aberta
+    jmp .fecha_entrada_e_encerra
+
+.erro_primeira_leitura:
+    mov rbx, msg_erro_leitura          ; apenas a entrada está aberta
     jmp .fecha_entrada_e_encerra
 
 .erro_leitura:
