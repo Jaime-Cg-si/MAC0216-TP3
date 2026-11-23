@@ -2,6 +2,8 @@
 
 global _start
 
+TAM_NOME equ 256 ; tamanho dos buffers de nome, contando o NUL
+
 section .data
 
 msg_entrada db "Digite o nome do arquivo de entrada: ", 0
@@ -9,8 +11,8 @@ msg_saida   db "Digite o nome do arquivo de saída: ", 0
 
 section .bss
 
-nome_entrada  resb 256
-nome_saida    resb 256
+nome_entrada  resb TAM_NOME
+nome_saida    resb TAM_NOME
 byte_arq      resb 1
 buffer_hex    resb 20 ; "0x" + 16 dígitos + LF + NUL
 descr_entrada resq 1
@@ -27,7 +29,11 @@ _start:
     call escreve_string                ; chamada função escreve_string(char* mensagem)
     add  rsp, 8                        ; coloca pilha livre
 
-; TODO: receber arquivo de entrada
+; recebendo nome do arquivo de entrada
+    push qword TAM_NOME                ; tamanho máximo, contando o NUL
+    push qword nome_entrada            ; buffer do nome
+    call le_string                     ; chamada função
+    add  rsp, 16                       ; coloca pilha livre
 
 ; solicitar e ler nome do arquivo de saída
 
@@ -36,7 +42,11 @@ _start:
     call escreve_string                ; chamada função
     add  rsp, 8                        ; coloca pilha livre
 
-; TODO: receber arquivo de saída
+; recebendo nome do arquivo de saída
+    push qword TAM_NOME                ; tamanho máximo, contando o NUL
+    push qword nome_saida              ; buffer do nome
+    call le_string                     ; chamada função
+    add  rsp, 16                       ; coloca pilha livre
 
 ; abrir arquivos usando abre_arquivo
 
@@ -166,6 +176,68 @@ le_byte_arquivo:
     mov     rdx, 1                     ; lê 1 byte
     syscall
 ; -------------------------------------------
+    pop r11                            ; restaura r11
+    pop rcx                            ; restaura rcx
+    pop rdx                            ; restaura rdx
+    pop rsi                            ; restaura rsi
+    pop rdi                            ; restaura rdi
+    pop rbp                            ; restaura rbp
+    ret                                ; retorno
+
+; le_string(char* buffer, int tam_max)
+; Lê uma linha da entrada padrão, um byte por vez, e a armazena terminada em NUL.
+; Guarda no máximo tam_max - 1 caracteres e descarta o restante da linha, para que
+; ele não seja lido como a próxima string.
+; Retorno: RAX = quantidade de caracteres armazenados.
+le_string:
+    push rbp                           ; rbp antigo
+    mov  rbp, rsp                      ; setta novo rbp
+    push rdi                           ; rdi antigo
+    push rsi                           ; rsi antigo
+    push rdx                           ; rdx antigo
+    push rcx                           ; rcx antigo (destruído pela syscall)
+    push r11                           ; r11 antigo (destruído pela syscall)
+    push r8                            ; r8 antigo -> buffer
+    push r9                            ; r9 antigo -> limite de caracteres
+    push r10                           ; r10 antigo -> quantidade armazenada
+    sub  rsp, 8                        ; variável local: byte lido
+
+    mov r8, [rbp+16]                   ; início do buffer
+    mov r9, [rbp+24]                   ; tamanho máximo
+    dec r9                             ; reserva uma posição para o NUL
+    mov r10, 0                         ; nenhum caractere armazenado
+
+.laco:
+; -------------------------------------------
+; Syscall: sys_read
+    mov     rax, 0                     ; sys_read
+    mov     rdi, 0                     ; stdin
+    mov     rsi, rsp                   ; endereço da variável local
+    mov     rdx, 1                     ; lê 1 byte
+    syscall
+; -------------------------------------------
+    cmp rax, 1                         ; verifica se leu um byte
+    jne .fim                           ; fim da entrada ou erro
+    mov al, [rsp]                      ; carrega o byte lido
+    cmp al, 10                         ; verifica ENTER (LF)
+    je  .fim                           ; encerra sem armazenar o LF
+    cmp r10, r9                        ; verifica limite do buffer
+    jge .laco                          ; buffer cheio: descarta o byte
+    mov [r8+r10], al                   ; armazena o caractere
+    inc r10                            ; contabiliza caractere
+    jmp .laco                          ; reinicia laço
+
+.fim:
+    cmp r9, 0                          ; tam_max <= 0 não tem espaço para o NUL
+    jl  .retorno                       ; não escreve no buffer
+    mov byte [r8+r10], 0               ; termina a string com NUL
+
+.retorno:
+    mov rax, r10                       ; retorna quantidade armazenada
+    add rsp, 8                         ; libera variável local
+    pop r10                            ; restaura r10
+    pop r9                             ; restaura r9
+    pop r8                             ; restaura r8
     pop r11                            ; restaura r11
     pop rcx                            ; restaura rcx
     pop rdx                            ; restaura rdx
