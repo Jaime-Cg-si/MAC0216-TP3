@@ -11,6 +11,14 @@ language = "system"
 entry = '''bash -c 'nasmfmt -ii 4 "$@" && sed -i -E -e "s/[[:space:]]+$//" -e :a -e "/^\n*$/{\$d;N;ba" -e "}" "$@"' --'''
 files = '\.asm$'
 
+[[repos.hooks]]
+id = "shfmt"
+name = "shfmt"
+language = "system"
+entry = "shfmt -i 4 -w"
+types = ["shell"]
+exclude_types = ["zsh", "ksh"]
+
 [[repos]]
 repo = "builtin"
 hooks = [
