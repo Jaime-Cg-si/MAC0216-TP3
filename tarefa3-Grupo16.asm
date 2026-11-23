@@ -64,7 +64,7 @@ _start:
     mov  [descr_saida], rax            ; copia descritor saída
     add  rsp, 16                       ; coloca pilha livre
 
-; TODO: loop de leitura byte a byte
+; loop de leitura: cada iteração processa um caractere UTF-8
 .laco_leitura:
     push qword byte_arq                ; carregando byte a ser lido (atualizado pela própria sys_read)
     push qword [descr_entrada]         ; carregando o descritor do arquivo a ser lido
@@ -76,8 +76,14 @@ _start:
     jle   .fim_arquivo                 ; arquivo de leitura acabou (ou deu erro na leitura)
     movzx rbx, byte [byte_arq]         ; salva o byte lido em rbx, zerando as demais posições
 
-; TODO: determinar se a sequência UTF-8 possui 1, 2, 3 ou 4 bytes
-; TODO: combinar bits para reconstruir o code point
+; identifica o tamanho da sequência e reconstrói o code point
+    push qword rbx                     ; byte inicial da sequência
+    push qword [descr_entrada]         ; descritor do arquivo de entrada
+    call decodifica_utf8               ; chamada função
+    add  rsp, 16                       ; coloca pilha livre
+    cmp  rax, 0                        ; verifica erro na leitura da continuação
+    jl   .fim_arquivo                  ; encerra a leitura
+    mov  rbx, rax                      ; code point em rbx
 
 ; chamar gera_string_hexadecimal e grava_string_arquivo
 
@@ -116,6 +122,78 @@ fim_programa:
     mov     rdi, 0                     ; sucesso
     syscall
 ; -------------------------------------------
+
+; decodifica_utf8(int descritor_arquivo, int byte_inicial)
+; Identifica o tamanho da sequência pelo byte inicial, lê os bytes de continuação e
+; reconstrói o code point.
+;   0xxxxxxx                            -> 1 byte
+;   110xxxxx 10xxxxxx                   -> 2 bytes
+;   1110xxxx 10xxxxxx 10xxxxxx          -> 3 bytes
+;   11110xxx 10xxxxxx 10xxxxxx 10xxxxxx -> 4 bytes
+; Retorno: RAX = code point, ou valor negativo se a leitura falhar ou o arquivo
+; terminar no meio da sequência.
+decodifica_utf8:
+    push rbp                           ; rbp antigo
+    mov  rbp, rsp                      ; setta novo rbp
+    push rbx                           ; rbx antigo -> code point parcial
+    push rcx                           ; rcx antigo -> continuações restantes
+
+    mov rbx, [rbp+24]                  ; carrega byte inicial
+    cmp rbx, 0x80                      ; 0xxxxxxx
+    jb  .um_byte
+    cmp rbx, 0xE0                      ; 110xxxxx
+    jb  .dois_bytes
+    cmp rbx, 0xF0                      ; 1110xxxx
+    jb  .tres_bytes
+
+    and rbx, 0x07                      ; 11110xxx: mantém 3 bits
+    mov rcx, 3                         ; 3 bytes de continuação
+    jmp .continuacao
+
+.um_byte:
+    mov rcx, 0                         ; sem bytes de continuação
+    jmp .continuacao
+
+.dois_bytes:
+    and rbx, 0x1F                      ; mantém 5 bits
+    mov rcx, 1                         ; 1 byte de continuação
+    jmp .continuacao
+
+.tres_bytes:
+    and rbx, 0x0F                      ; mantém 4 bits
+    mov rcx, 2                         ; 2 bytes de continuação
+
+.continuacao:
+    cmp  rcx, 0                        ; verifica se restam continuações
+    je   .pronto
+    push qword byte_arq                ; destino do byte lido
+    push qword [rbp+16]                ; descritor do arquivo
+    call le_byte_arquivo               ; chamada função
+    add  rsp, 16                       ; coloca pilha livre
+    cmp  rax, 1                        ; verifica se leu o byte
+    jne  .falha
+
+    movzx rax, byte [byte_arq]         ; carrega byte de continuação
+    and   rax, 0x3F                    ; mantém 6 bits
+    shl   rbx, 6                       ; abre espaço para os novos bits
+    or    rbx, rax                     ; acrescenta os novos bits
+    dec   rcx                          ; contabiliza continuação
+    jmp   .continuacao                 ; reinicia laço
+
+.falha:
+    cmp rax, 0                         ; erro da syscall já é negativo
+    jl  .retorno
+    mov rax, -1                        ; fim de arquivo no meio da sequência
+    jmp .retorno
+
+.pronto:
+    mov rax, rbx                       ; retorna code point
+
+.retorno:
+    pop rcx                            ; restaura rcx
+    pop rbx                            ; restaura rbx
+    pop rbp                            ; restaura rbp
+    ret                                ; retorno
 
 fecha_arquivo:
     push rbp                           ; empilha rbp anterior
