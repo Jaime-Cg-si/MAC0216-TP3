@@ -12,7 +12,7 @@ section .bss
 nome_entrada  resb 256
 nome_saida    resb 256
 byte_arq      resb 1
-buffer_hex    resb 16
+buffer_hex    resb 20 ; "0x" + 16 dígitos + LF + NUL
 descr_entrada resq 1
 descr_saida   resq 1
 code_point    resq 1
@@ -56,7 +56,6 @@ _start:
 
 ; TODO: loop de leitura byte a byte
 .laco_leitura:
-
     push qword byte_arq                ; carregando byte a ser lido (atualizado pela própria sys_read)
     push qword [descr_entrada]         ; carregando o descritor do arquivo a ser lido
     call le_byte_arquivo               ; chamada função
@@ -112,23 +111,28 @@ fecha_arquivo:
     push rbp                           ; empilha rbp anterior
     mov  rbp, rsp                      ; setta o novo rbp
     push rdi                           ; empilha rdi anterior
+    push rcx                           ; empilha rcx anterior (destruído pela syscall)
+    push r11                           ; empilha r11 anterior (destruído pela syscall)
                                        ; -------------------------------------------
                                        ; Syscall: sys_close
     mov     rax, 3                     ; sys_close
     mov     rdi, [rbp+16]              ; rdi recebe o descritor
     syscall
 ; -------------------------------------------
+    pop r11                            ; restaurar r11
+    pop rcx                            ; restaurar rcx
     pop rdi                            ; restaurar rdi
     pop rbp                            ; restaurar rbp
     ret
 
 abre_arquivo:
-
     push rbp                           ; salva rbp antigo
     mov  rbp, rsp                      ; setta novo rbp
     push rdi                           ; salva rdi antigo
     push rsi                           ; salva rsi antigo
     push rdx                           ; salva rdx antigo
+    push rcx                           ; salva rcx antigo (destruído pela syscall)
+    push r11                           ; salva r11 antigo (destruído pela syscall)
                                        ; -------------------------------------------
                                        ; Syscall: sys_open
     mov     rax, 2                     ; sys_open
@@ -138,6 +142,8 @@ abre_arquivo:
     syscall
 ; -------------------------------------------
 ; RAX agora contém o descritor do arquivo
+    pop r11                            ; restaura r11
+    pop rcx                            ; restaura rcx
     pop rdx                            ; restaura rdx
     pop rsi                            ; restaura rsi
     pop rdi                            ; restaura rdi
@@ -150,6 +156,8 @@ le_byte_arquivo:
     push rdi                           ; rdi antigo
     push rsi                           ; rsi antigo
     push rdx                           ; rdx antigo
+    push rcx                           ; rcx antigo (destruído pela syscall)
+    push r11                           ; r11 antigo (destruído pela syscall)
                                        ; -------------------------------------------
                                        ; Syscall: sys_read
     mov     rax, 0                     ; sys_read
@@ -158,6 +166,8 @@ le_byte_arquivo:
     mov     rdx, 1                     ; lê 1 byte
     syscall
 ; -------------------------------------------
+    pop r11                            ; restaura r11
+    pop rcx                            ; restaura rcx
     pop rdx                            ; restaura rdx
     pop rsi                            ; restaura rsi
     pop rdi                            ; restaura rdi
@@ -172,6 +182,8 @@ escreve_string:
     push rdx                           ; rdx antigo
     push rbx                           ; rbx antigo -> contador
     push rcx                           ; rcx antigo -> i
+    push r11                           ; r11 antigo (destruído pela syscall)
+    push rax                           ; rax antigo (função sem retorno)
 
 ; preparação para o loop
     mov rsi, [rbp+16]                  ; apontar rsi começo da mensagem
@@ -195,6 +207,8 @@ escreve_string:
     mov     rdx, rbx                   ; tamanho calculado
     syscall
 ; -------------------------------------------
+    pop rax                            ; restaura rax
+    pop r11                            ; restaura r11
     pop rcx                            ; restaura rcx
     pop rbx                            ; restaura rbx
     pop rdx                            ; restaura rdx
@@ -212,6 +226,7 @@ grava_string_arquivo:
     push rdx                           ; rdx antigo
     push rbx                           ; rbx antigo -> contador
     push rcx                           ; rcx antigo -> i
+    push r11                           ; r11 antigo (destruído pela syscall)
 
 ; preparação laço
     mov rsi, [rbp+24]                  ; rsi aponta começo mensagem
@@ -235,6 +250,7 @@ grava_string_arquivo:
     mov     rdx, rbx                   ; tamanho mensagem
     syscall
 ; -------------------------------------------
+    pop r11                            ; restaura r11
     pop rcx                            ; restaura rcx
     pop rbx                            ; restaura rbx
     pop rdx                            ; restaura rdx
@@ -275,8 +291,8 @@ gera_string_hexadecimal:
     mov byte [rcx+r9], 'x'             ; agora sim '0x'
     inc r9                             ; próxima posição livre
 
-; 3. Tradução de todos os códigos para caracteres
 .traduz:
+; 3. Tradução de todos os códigos para caracteres
     cmp r8, 0                          ; verifica se acabaram os elementos empilhados
     jle .pronto                        ; termina de carregar o buffer
     dec r8                             ; contabiliza o caracter
