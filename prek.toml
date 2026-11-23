@@ -1,0 +1,9 @@
+exclude = { glob = ["arquivos_enunciado/**"] }
+
+[[repos]]
+repo = "builtin"
+hooks = [
+    { id = "check-added-large-files" },
+    { id = "end-of-file-fixer" },
+    { id = "trailing-whitespace" },
+]

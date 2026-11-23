@@ -94,14 +94,14 @@ _start:
         ;fecha o arquivo de entrada
         push qword [descr_entrada]
         call fecha_arquivo                      ;chamada da função
-        add rsp, 8                              ;coloca pilha livre 
+        add rsp, 8                              ;coloca pilha livre
 
         ;fecha o arquivo de saída
         push qword [descr_saida]
         call fecha_arquivo
         add rsp, 8
         jmp fim_programa                        ;encerra programa
-    
+
 ;;
 fim_programa:
 ; -------------------------------------------
@@ -317,4 +317,3 @@ gera_string_hexadecimal:
     pop rbp
     ;retorno
     ret
-
